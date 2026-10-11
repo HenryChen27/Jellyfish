@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>水母游泳与触须动画预览</title>
+<style>
+@font-face {font-family:pop;src:url('../assets/fonts/DFPOP1-W5.ttf')}
+body{margin:0;background:#0b1c2b;color:#c4e8f4;font:18px pop,sans-serif;text-align:center}
+h1{font-size:28px;font-weight:400;margin:20px 0 8px}p{margin:8px;color:#84aec1;font-size:15px}
+canvas{max-width:100%;height:auto}button{font:inherit;color:#c4e8f4;background:#18394c;border:1px solid #47758c;border-radius:8px;padding:8px 20px;cursor:pointer}
+</style>
+<h1>伞盖收缩 · 触须跟随</h1>
+<p>外圈固定；短促收缩后缓慢舒展，触须根部固定、末端延迟摆动。</p>
+<canvas width="1200" height="570"></canvas><br>
+<button id="pause">暂停 / 继续</button>
+<script src="../js/config.js"></script>
+<script src="../js/jellyfish-animation.js"></script>
+<script>
+const canvas=document.querySelector('canvas'),ctx=canvas.getContext('2d');
+let paused=false,clock=0,last=0;
+document.querySelector('button').onclick=()=>paused=!paused;
+const images=Array.from({length:11},(_,i)=>new Promise(resolve=>{
+  const image=new Image();image.onload=()=>resolve(image);image.src=`../assets/jellyfish/fish${i+1}.png`;
+}));
+window.previewReady=Promise.all(images).then(sprites=>{
+  window.renderPreview=(time,normalised=false)=>{
+    ctx.fillStyle='#0b1c2b';ctx.fillRect(0,0,1200,570);
+    sprites.forEach((sprite,i)=>{
+      const profile=CONFIG.ANIM.breathing[i];
+      const scale=Math.min(170/sprite.width,205/sprite.height);
+      const x=i%6*200+100,y=Math.floor(i/6)*280+125;
+      ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
+      JellyfishAnimation.draw(ctx,{sprite,w:sprite.width,h:sprite.height,level:i+1,breathPhase:i*.65},
+        profile,normalised?time*profile.period:time);
+      ctx.restore();
+      ctx.fillStyle='#c4e8f4';ctx.font='18px pop,sans-serif';ctx.textAlign='center';
+      ctx.fillText(`${i+1} 级`,x,Math.floor(i/6)*280+250);
+    });
+  };
+  function loop(time){if(last&&!paused)clock+=time-last;last=time;renderPreview(clock);requestAnimationFrame(loop)}
+  requestAnimationFrame(loop);
+});
+</script>
+</html>

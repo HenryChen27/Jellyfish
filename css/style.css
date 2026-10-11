@@ -1,0 +1,103 @@
+@font-face {
+  font-family: 'JellyfishCountdown';
+  src: local('汉仪第五人格体'), local('HYDiWRGJ'),
+       url('../assets/fonts/汉仪第五人格体.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JellyfishPOP';
+  src: local('华康POP1体W5'), local('華康POP1體W5'),
+       local('DFPOP1-W5'), local('DFPOP1W5'),
+       url('../assets/fonts/DFPOP1-W5.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0a1a;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: 'JellyfishPOP', '华康POP1体W5', 'DFPOP1-W5', sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+canvas {
+  display: block;
+  image-rendering: auto;
+  cursor: pointer;
+}
+
+.settings {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 10;
+  color: #e5f1f2;
+  font-family: 'JellyfishPOP', sans-serif;
+}
+.settings button { font: inherit; cursor: pointer; color: inherit; }
+.settings-toggle { display: block; width: 46px; height: 46px; padding: 0; border: 0; background: transparent; border-radius: 50%; }
+#settingsGear { width: 46px; height: 46px; }
+.settings-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  padding: 24px;
+  width: min(290px, calc(100vw - 24px));
+  border-radius: 4px;
+  isolation: isolate;
+}
+.settings-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--chalk-panel) center / 100% 100%;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  mask-image: var(--chalk-panel);
+  mask-size: 100% 100%;
+  -webkit-mask-image: var(--chalk-panel);
+  -webkit-mask-size: 100% 100%;
+  pointer-events: none;
+}
+.settings-heading { padding-bottom: 21px; }
+.settings-heading h2 { font-size: 21px; font-weight: 400; letter-spacing: 1px; }
+.settings-heading > span { display: block; margin-top: 5px; color: #adc2cb; font-size: 12px; }
+.settings label { display: flex; justify-content: space-between; font-size: 15px; }
+.settings output { color: #b8d4df; font-size: 13px; font-family: sans-serif; }
+.chalk-slider { position: relative; height: 28px; margin: 10px 0 20px; }
+.chalk-slider-track { position: absolute; left: 10.5px; right: 10.5px; top: 9px; height: 10px; background: var(--chalk-track) center / 100% 100%; pointer-events: none; }
+.chalk-slider-fill { position: absolute; left: 0; top: 0; height: 100%; width: calc(var(--value, 0) * 100%); background: var(--chalk-fill) center / 100% 100%; }
+.settings input[type="range"] { position: relative; width: 100%; height: 28px; margin: 0; appearance: none; -webkit-appearance: none; background: transparent; cursor: pointer; }
+.settings input[type="range"]::-webkit-slider-runnable-track { height: 10px; background: transparent; }
+.settings input[type="range"]::-moz-range-track { height: 10px; background: transparent; }
+.settings input[type="range"]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 21px; height: 21px; margin-top: -5.5px; border: 0; border-radius: 0; background: var(--chalk-knob) center / 100% 100%; }
+.settings input[type="range"]::-moz-range-thumb { width: 21px; height: 21px; border: 0; border-radius: 0; background: var(--chalk-knob) center / 100% 100%; }
+.settings input[type="range"]:hover { filter: brightness(1.1); }
+.restart-button {
+  display: flex; justify-content: space-between; align-items: center; width: 100%;
+  height: 39px; padding: 0 13px; border: 0; background: var(--chalk-button) center / 100% 100%;
+  color: #152635 !important;
+}
+.restart-button:hover { background-image: var(--chalk-button-hover); }
+.settings button:focus-visible, .settings input:focus-visible { outline: 2px solid #b5e5ef; outline-offset: 5px; }
+@media (prefers-reduced-motion: no-preference) {
+  .settings-panel { animation: settings-appear .18s ease-out; }
+  @keyframes settings-appear { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+}
