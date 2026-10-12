@@ -1447,6 +1447,8 @@
   }
 
   // --- Start ---
+  // Host windows can flush progress before exporting storage and closing.
+  window.JellyfishGame=Object.freeze({save:saveCurrentGame});
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

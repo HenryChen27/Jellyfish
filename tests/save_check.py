@@ -113,7 +113,7 @@ with sync_playwright() as p:
     assert page.evaluate("saveCheck.G.phase==='gameover' && SessionSave.read()===null")
     assert page.evaluate('saveCheck.G.ending.score')==457
     assert page.locator('#exitButton').count()==0
-    assert page.evaluate('typeof window.JellyfishGame==="undefined"')
+    assert page.evaluate('typeof window.JellyfishGame.save==="function" && typeof window.JellyfishGame.safeSaveAndExit==="undefined"')
     assert page.locator('button:not([tabindex="-1"])').count()==0
     assert page.evaluate("document.activeElement.tagName!=='BUTTON'")
     assert not errors,errors

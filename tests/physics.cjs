@@ -10,6 +10,7 @@ function game() {
   let now = 1;
   const context = vm.createContext({
     Matter, console, performance: { now: () => now },
+    window: {},
     SessionSave: { write: () => true, clear() {} },
     queueMicrotask: fn => fn(),
     document: { readyState: 'loading', addEventListener() {} },
