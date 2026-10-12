@@ -102,5 +102,6 @@ const CONFIG = {
     click: 'assets/audio/click.MP3',
     background: 'assets/audio/background.MP3',
     start: 'assets/audio/start.MP3',
+    ending: 'assets/audio/ending.MP3',
   },
 };

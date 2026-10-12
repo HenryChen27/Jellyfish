@@ -42,10 +42,39 @@ canvas {
   cursor: pointer;
 }
 
+.result-actions { position: fixed; display: flex; gap: 80px; width: 1280px; transform-origin: top center; z-index: 5; }
+.result-actions[hidden] { display: none; }
+.gameplay-rank { position: fixed; width: 440px; z-index: 4; transform-origin: bottom left; color: #BCD8FD; }
+.gameplay-rank[hidden], .gameplay-rank section[hidden] { display: none; }
+.gameplay-rank section { padding: 20px 22px; background: linear-gradient(110deg, #10283b80, #234b6a22); }
+.gameplay-rank h2 { font-size: 44px; font-weight: 400; padding-bottom: 14px; border-bottom: 2px solid #bcd8fd55; }
+.gameplay-rank ol { list-style: none; }
+.gameplay-rank li { display: flex; align-items: center; justify-content: flex-start; gap: 46px; height: 130px; padding: 0 20px 0 8px; border-bottom: 1px solid #bcd8fd20; font-size: 44px; color: #e4dfa0; }
+.gameplay-rank li img { width: 82px; height: 98px; object-fit: contain; }
+.gameplay-rank button { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; padding: 18px 22px; border: 0; background: transparent; color: #BCD8FD; font: 40px 'JellyfishPOP', sans-serif; text-align: center; cursor: pointer; text-shadow: 0 0 14px #76b7de; }
+.gameplay-rank button img { width: 150px; height: 118px; object-fit: contain; }
+.gameplay-controls { display: flex; gap: 20px; width: 660px; }
+.gameplay-controls button { width: 320px; flex: 0 0 320px; }
+.gameplay-rank button:hover { filter: brightness(1.2); }
+.result-button { display: flex; justify-content: center; align-items: center; gap: 25px; width: 600px; height: 162px; border: 0; background: url('../assets/button.png') center / 100% 100% no-repeat; color: #c9e8f7; font: 42px 'JellyfishPOP', sans-serif; cursor: pointer; text-shadow: 0 0 12px #77caff; }
+.result-button img { width: 65px; height: 65px; object-fit: contain; }
+.result-button:hover { filter: brightness(1.2); }
+.records-dialog { margin: auto; width: min(600px, calc(100vw - 30px)); max-height: 80vh; padding: 25px; color: #d1e9f4; border: 1px solid #708d9c66; border-radius: 5px; background: linear-gradient(155deg, #203c50eb, #0b1b2bf2); backdrop-filter: blur(18px); font: 18px 'JellyfishPOP', sans-serif; box-shadow: 0 15px 80px #0008; }
+.records-dialog::backdrop { background: #041322a8; backdrop-filter: blur(6px); }
+.records-heading { display: flex; justify-content: space-between; align-items: center; }
+.records-heading h2 { font-size: 25px; font-weight: 400; }
+.records-heading button { width: 40px; height: 40px; border: 0; background: transparent; color: inherit; font-size: 30px; cursor: pointer; }
+.records-dialog p { color: #9cbcca; font-size: 14px; margin: 8px 0 18px; }
+.records-scroll { overflow-y: auto; max-height: 55vh; scrollbar-color: #91b9cd #192f41; }
+.records-dialog table { width: 100%; border-collapse: collapse; text-align: center; }
+.records-dialog th { position: sticky; top: 0; background: #203b4e; font-weight: 400; color: #a8d4e8; }
+.records-dialog td, .records-dialog th { padding: 13px 5px; border-bottom: 1px solid #b1d6e41c; }
+
 .settings {
   position: fixed;
-  top: max(12px, env(safe-area-inset-top));
-  left: max(12px, env(safe-area-inset-left));
+  transform-origin: bottom right;
+  bottom: 12px;
+  right: 12px;
   z-index: 10;
   color: #e5f1f2;
   font-family: 'JellyfishPOP', sans-serif;
@@ -55,13 +84,20 @@ canvas {
 #settingsGear { width: 46px; height: 46px; }
 .settings-panel {
   position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
+  bottom: calc(100% + 8px);
+  right: 0;
   padding: 24px;
   width: min(290px, calc(100vw - 24px));
   border-radius: 4px;
   isolation: isolate;
 }
+.save-shade { position: fixed; inset: 0; background: rgba(0, 7, 18, .6); z-index: 11; }
+.save-choice { position: fixed; left: 50%; top: 43%; transform: translate(-50%, -50%); text-align: center; width: min(580px, calc(100vw - 36px)); color: #d5e9f6; z-index: 12; }
+.save-choice[hidden] { display: none; }
+.save-choice h2 { font-size: clamp(22px, 3vw, 34px); font-weight: 400; text-shadow: 0 0 20px #76c7ed; }
+.save-choice > div { display: flex; gap: 22px; justify-content: center; margin-top: 26px; }
+.save-choice button { width: 172.5px; height: 40.5px; border: 0; background: var(--chalk-button) center / 100% 100%; color: #152635; font: 18px 'JellyfishPOP', sans-serif; cursor: pointer; }
+.save-choice button:hover { background-image: var(--chalk-button-hover); }
 .settings-panel::before {
   content: '';
   position: absolute;
@@ -96,7 +132,10 @@ canvas {
   color: #152635 !important;
 }
 .restart-button:hover { background-image: var(--chalk-button-hover); }
-.settings button:focus-visible, .settings input:focus-visible { outline: 2px solid #b5e5ef; outline-offset: 5px; }
+.settings input:focus-visible { outline: 2px solid #b5e5ef; outline-offset: 5px; }
+button:focus, button:focus-visible { outline: none; }
+.records-dialog[open] { animation: records-enter .22s ease-out; }
+@keyframes records-enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: no-preference) {
   .settings-panel { animation: settings-appear .18s ease-out; }
   @keyframes settings-appear { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }

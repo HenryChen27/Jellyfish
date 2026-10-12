@@ -60,6 +60,7 @@ const Loader = (() => {
       loadImage('background', CONFIG.IMAGES.background),
       loadImage('backgroundStart', CONFIG.IMAGES.backgroundStart),
       loadImage('bubble', CONFIG.IMAGES.bubble),
+      ...['button','1st','2nd','3rd','rank','restart'].map(key => loadImage(key, `assets/${key}.png`)),
       loadImage('clip', CONFIG.IMAGES.clip),
       loadImage('warning', CONFIG.IMAGES.warning),
       loadImage('line', CONFIG.IMAGES.line),
@@ -71,6 +72,7 @@ const Loader = (() => {
       loadAudio('countdown', CONFIG.AUDIO.countdown),
       loadAudio('goWhistle', CONFIG.AUDIO.goWhistle),
       loadAudio('click', CONFIG.AUDIO.click),
+      loadAudio('ending', CONFIG.AUDIO.ending),
     ];
 
     // Jellyfish sprites
