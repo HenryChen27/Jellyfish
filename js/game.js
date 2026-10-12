@@ -259,17 +259,23 @@
     G.dropLevel = null;
     G.canDrop = false;
 
-    // After 1s cooldown, next-in-line moves to clip and pick what follows
+    armDropCooldown(1000);
+    saveCurrentGame();
+  }
+
+  function armDropCooldown(duration) {
+    G.canDrop=false;
+    G.dropCooldownEnd=performance.now()+duration;
     G.dropCooldownTimer = setTimeout(() => {
       G.dropCooldownTimer = null;
+      G.dropCooldownEnd=null;
       G.dropLevel = G.nextLevel;
       G.clipAppearStart = performance.now();
       G.nextLevel = pickNextLevel();
       G.nextAppearStart = performance.now();
       G.canDrop = true;
       saveCurrentGame();
-    }, 1000);
-    saveCurrentGame();
+    }, duration);
   }
 
   // ============================================================
@@ -687,12 +693,16 @@
 
   function closeRestartChoice() {
     G.restartPrompt=false;
+    G.confirmAction=null;
     UITransitions.show(document.getElementById('restartChoice'),false);
     UITransitions.show(document.getElementById('saveShade'),false);
   }
 
   function requestRestart() {
     if(G.phase!=='playing')return;
+    G.confirmAction='restart';
+    document.getElementById('restartChoice').setAttribute('aria-label','确认重新开始');
+    document.querySelector('#restartChoice h2').textContent='是否重新开始？';
     G.restartPrompt=true;G.isDragging=false;G.keys.left=G.keys.right=false;
     UITransitions.show(document.getElementById('settingsPanel'),false);
     document.getElementById('settingsToggle').setAttribute('aria-expanded','false');
@@ -719,8 +729,8 @@
     for(const m of G.merges)items.push({level:m.newLevel,x:m.midX,y:m.midY,angle:0,vx:0,vy:0,
       angularVelocity:0,sleeping:false,age:0,breathPhase:0,pendingDropImpact:false});
     const saved={version:1,score:G.score,totalScore:G.totalScore,clipX:G.clipX,
-      dropLevel:G.dropLevel===null?G.nextLevel:G.dropLevel,
-      nextLevel:G.dropLevel===null?pickNextLevel():G.nextLevel,items,
+      dropLevel:G.dropLevel,nextLevel:G.nextLevel,items,
+      cooldownRemaining:G.dropLevel===null?Math.max(0,(G.dropCooldownEnd||now)-now):0,
       overflowElapsed:G.overflowStart===null?null:now-G.overflowStart,
       dangerDeadline:G.overflowStart===null?null:Date.now()+CONFIG.ANIM.overflowTime-(now-G.overflowStart)};
     const success=SessionSave.write(saved);
@@ -730,7 +740,16 @@
 
   function setupSaveControls() {
     document.getElementById('cancelRestart').onclick=closeRestartChoice;
-    document.getElementById('confirmRestart').onclick=()=>{closeRestartChoice();replayWithBubbles();};
+    document.getElementById('confirmRestart').onclick=async()=>{
+      if(!G.restartPrompt)return;
+      if(G.confirmAction==='exit') {
+        const button=document.getElementById('confirmRestart');button.disabled=true;
+        try {
+          const result=await safeSaveAndExit();
+          if(!result.saved)document.querySelector('#restartChoice h2').textContent='存档失败，请重试或取消';
+        }finally{button.disabled=false;}
+      }else{closeRestartChoice();replayWithBubbles();}
+    };
     window.addEventListener('pagehide',saveCurrentGame);
     window.addEventListener('beforeunload',saveCurrentGame);
     document.addEventListener('visibilitychange',()=>{if(document.hidden)saveCurrentGame();});
@@ -739,13 +758,15 @@
     };
     document.getElementById('newGame').onclick=()=>{SessionSave.clear();G.pendingSave=null;startGame();};
     document.getElementById('exitButton').onclick=()=>{
-      if(!G.engine || !G.assets)return;
-      if(!saveCurrentGame()) {
-        document.getElementById('exitButton').title='存档失败，请检查浏览器存储后重试';return;
-      }
-      restartGame();
+      if(!G.engine || !G.assets || !['playing','gameover'].includes(G.phase))return;
+      G.confirmAction='exit';G.restartPrompt=true;
+      G.isDragging=false;G.keys.left=G.keys.right=false;
+      document.getElementById('restartChoice').setAttribute('aria-label','确认退出');
+      document.querySelector('#restartChoice h2').textContent='是否退出？';
       UITransitions.show(document.getElementById('settingsPanel'),false);
       document.getElementById('settingsToggle').setAttribute('aria-expanded','false');
+      UITransitions.show(document.getElementById('restartChoice'),true);
+      UITransitions.show(document.getElementById('saveShade'),true);
     };
   }
 
@@ -778,6 +799,8 @@
 
   function finishGame(time) {
     if(G.phase!=='playing') return;
+    if(G.dropCooldownTimer!==null)clearTimeout(G.dropCooldownTimer);
+    G.dropCooldownTimer=null;G.dropCooldownEnd=null;
     closeRestartChoice();
     SessionSave.clear();
     G.phase='gameover';
@@ -825,6 +848,7 @@
       const saved=G.pendingSave;G.pendingSave=null;
       G.score=saved.score;G.totalScore=saved.totalScore||0;G.clipX=clamp(saved.clipX,CONFIG.CLIP.minX,CONFIG.CLIP.maxX);
       G.dropLevel=saved.dropLevel;G.nextLevel=saved.nextLevel;
+      if(saved.dropLevel===null)armDropCooldown(saved.cooldownRemaining);
       for(const data of saved.items) {
         const body=createJellyfishBody(data.x,data.y,data.level);
         Matter.Body.setPosition(body,{x:data.x,y:data.y});
@@ -862,6 +886,7 @@
     activeSounds.clear();
     if (G.dropCooldownTimer !== null) clearTimeout(G.dropCooldownTimer);
     G.dropCooldownTimer = null;
+    G.dropCooldownEnd=null;
     G.isDragging = false;
     G.keys.left = G.keys.right = false;
     G.bubbleTransition = null;
@@ -892,9 +917,6 @@
   function render(timestamp) {
     UITransitions.show(document.getElementById('exitButton'),G.phase==='playing'||G.phase==='gameover');
     EndScene.updateGameplay(G.canvas,G.phase);
-    const mapRect=G.canvas.getBoundingClientRect(),settings=document.querySelector('.settings');
-    settings.style.right=`${window.innerWidth-mapRect.right+12}px`;
-    settings.style.bottom=`${window.innerHeight-mapRect.bottom+12}px`;
     const ctx = G.ctx;
     const W = CONFIG.GAME_WIDTH;
     const H = CONFIG.GAME_HEIGHT;
