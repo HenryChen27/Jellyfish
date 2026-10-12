@@ -10,7 +10,7 @@ $passwordLine=$credentialLines | Where-Object { $_ -like 'password=*' } | Select
 if(!$passwordLine){throw 'GitHub authentication is unavailable'}
 $headers=@{Authorization="Bearer $($passwordLine.Substring(9))";'User-Agent'='Jellyfish-release';Accept='application/vnd.github+json';'X-GitHub-Api-Version'='2022-11-28'}
 $api='https://api.github.com/repos/HenryChen27/Jellyfish/releases'
-$body=Get-Content (Join-Path $releaseDir 'release-notes.md') -Raw -Encoding UTF8
+$body=[IO.File]::ReadAllText((Join-Path $releaseDir 'release-notes.md'),[Text.Encoding]::UTF8)
 $payload=@{tag_name="desktop-v$Version";target_commitish=$commit;name="合成大水母 $Version";body=$body;draft=$true;prerelease=$false}|ConvertTo-Json
 $release=Invoke-RestMethod -Method Post -Uri $api -Headers $headers -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($payload))
 # Keep the release private until every downloadable asset has uploaded.
