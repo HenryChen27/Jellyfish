@@ -60,6 +60,7 @@
 
     // Game over
     overflowStart: null,
+    ending: null,
 
     // Timing
     countdownEnd: 0,
@@ -266,7 +267,9 @@
       G.nextLevel = pickNextLevel();
       G.nextAppearStart = performance.now();
       G.canDrop = true;
+      saveCurrentGame();
     }, 1000);
+    saveCurrentGame();
   }
 
   // ============================================================
@@ -344,6 +347,7 @@
       newLevel,
       newItem: null,
     });
+    queueCriticalSave();
   }
 
   function updateMergeAnimations(dt) {
@@ -482,9 +486,9 @@
     if (overflowing) {
       if (G.overflowStart === null) {
         G.overflowStart = now;
+        saveCurrentGame();
       } else if (now - G.overflowStart >= CONFIG.ANIM.overflowTime) {
-        G.phase = 'gameover';
-        playSound('start');
+        finishGame(now);
       }
     } else {
       G.overflowStart = null;
@@ -521,6 +525,7 @@
   }
 
   function startBackgroundMusic() {
+    if(G.phase==='exited')return;
     try {
       if (!bgm) {
         bgm = new Audio(CONFIG.AUDIO.background);
@@ -540,13 +545,13 @@
     ChalkUI.install();
     const toggle = document.getElementById('settingsToggle');
     const panel = document.getElementById('settingsPanel');
-    const setOpen = open => { panel.hidden = !open; toggle.setAttribute('aria-expanded', String(open)); };
-    toggle.addEventListener('click', () => setOpen(panel.hidden));
+    const setOpen = open => { UITransitions.show(panel,open); toggle.setAttribute('aria-expanded', String(open)); };
+    toggle.addEventListener('click', () => setOpen(toggle.getAttribute('aria-expanded')!=='true'));
     document.addEventListener('pointerdown', event => {
       if (!event.target.closest('.settings')) setOpen(false);
     });
     document.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && !panel.hidden) { setOpen(false); toggle.focus(); }
+      if (event.key === 'Escape' && !panel.hidden) setOpen(false);
     });
     for (const [id, key] of [['musicVolume', 'musicVolume'], ['effectsVolume', 'effectsVolume']]) {
       const slider = document.getElementById(id);
@@ -565,10 +570,6 @@
         try { localStorage.setItem('jellyfish.audioSettings', JSON.stringify(audioSettings)); } catch (e) {}
       });
     }
-    document.getElementById('restartButton').addEventListener('click', () => {
-      if (!G.engine || !G.assets) return;
-      restartGame(); startGame(); setOpen(false);
-    });
   }
 
   // ============================================================
@@ -586,15 +587,15 @@
     }
 
     function onDown(cx, cy) {
+      if(G.restartPrompt)return;
       const pos = getGamePos(cx, cy);
 
       if (G.phase === 'title') {
-        startGame();
+        requestStart();
         return;
       }
 
       if (G.phase === 'gameover') {
-        restartGame();
         return;
       }
 
@@ -646,14 +647,15 @@
 
     // Keyboard — debug: C to spawn 10 random jellyfish
     document.addEventListener('keydown', (e) => {
-      if (e.target.closest && e.target.closest('.settings')) return;
+      if(G.restartPrompt)return;
+      if(document.querySelector('dialog[open]'))return;
+      if (e.target.closest && e.target.closest('.settings, .result-actions, .records-dialog, .gameplay-rank, .save-choice')) return;
       if (['ArrowLeft', 'ArrowRight', 'ArrowDown', 'Enter'].includes(e.key)) {
         e.preventDefault();
         if (e.key === 'ArrowLeft') G.keys.left = true;
         if (e.key === 'ArrowRight') G.keys.right = true;
         if (!e.repeat && (e.key === 'Enter' || e.key === 'ArrowDown')) {
-          if (G.phase === 'title') startGame();
-          else if (G.phase === 'gameover') restartGame();
+          if (G.phase === 'title') requestStart();
           else dropJellyfish();
         }
       }
@@ -674,13 +676,137 @@
   // ============================================================
   // Game State Transitions
   // ============================================================
+  function requestStart() {
+    const saved=SessionSave.read();
+    if(saved) {
+      G.phase='savechoice';G.keys.left=G.keys.right=false;
+      UITransitions.show(document.getElementById('saveChoice'),true);
+      UITransitions.show(document.getElementById('saveShade'),true);
+    }else startGame();
+  }
+
+  function closeRestartChoice() {
+    G.restartPrompt=false;
+    UITransitions.show(document.getElementById('restartChoice'),false);
+    UITransitions.show(document.getElementById('saveShade'),false);
+  }
+
+  function requestRestart() {
+    if(G.phase!=='playing')return;
+    G.restartPrompt=true;G.isDragging=false;G.keys.left=G.keys.right=false;
+    UITransitions.show(document.getElementById('settingsPanel'),false);
+    document.getElementById('settingsToggle').setAttribute('aria-expanded','false');
+    UITransitions.show(document.getElementById('restartChoice'),true);
+    UITransitions.show(document.getElementById('saveShade'),true);
+  }
+
+  function queueCriticalSave() {
+    if(G.saveQueued)return;
+    G.saveQueued=true;
+    queueMicrotask(()=>{G.saveQueued=false;saveCurrentGame();});
+  }
+
+  function saveCurrentGame() {
+    if(G.phase!=='playing' || !G.assets || !G.engine)return true;
+    const now=performance.now();
+    const items=G.items.filter(i=>!i.isMerging&&i.bodyInWorld).map(i=>({
+      level:i.level,x:i.body.position.x,y:i.body.position.y,angle:i.body.angle,
+      vx:i.body.position.x-i.body.positionPrev.x,vy:i.body.position.y-i.body.positionPrev.y,
+      angularVelocity:i.body.angle-i.body.anglePrev,sleeping:i.body.isSleeping,
+      age:now-i.spawnTime,breathPhase:i.breathPhase,pendingDropImpact:!!i.pendingDropImpact
+    }));
+    // Score is already awarded when merging starts; save its resulting jellyfish.
+    for(const m of G.merges)items.push({level:m.newLevel,x:m.midX,y:m.midY,angle:0,vx:0,vy:0,
+      angularVelocity:0,sleeping:false,age:0,breathPhase:0,pendingDropImpact:false});
+    const saved={version:1,score:G.score,totalScore:G.totalScore,clipX:G.clipX,
+      dropLevel:G.dropLevel===null?G.nextLevel:G.dropLevel,
+      nextLevel:G.dropLevel===null?pickNextLevel():G.nextLevel,items,
+      overflowElapsed:G.overflowStart===null?null:now-G.overflowStart,
+      dangerDeadline:G.overflowStart===null?null:Date.now()+CONFIG.ANIM.overflowTime-(now-G.overflowStart)};
+    const success=SessionSave.write(saved);
+    if(success)G.lastAutoSave=performance.now();
+    return success;
+  }
+
+  function setupSaveControls() {
+    document.getElementById('cancelRestart').onclick=closeRestartChoice;
+    document.getElementById('confirmRestart').onclick=()=>{closeRestartChoice();replayWithBubbles();};
+    window.addEventListener('pagehide',saveCurrentGame);
+    window.addEventListener('beforeunload',saveCurrentGame);
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)saveCurrentGame();});
+    document.getElementById('continueSave').onclick=()=>{
+      const saved=SessionSave.read();G.pendingSave=saved;startGame();
+    };
+    document.getElementById('newGame').onclick=()=>{SessionSave.clear();G.pendingSave=null;startGame();};
+    document.getElementById('exitButton').onclick=()=>{
+      if(!G.engine || !G.assets)return;
+      if(!saveCurrentGame()) {
+        document.getElementById('exitButton').title='存档失败，请检查浏览器存储后重试';return;
+      }
+      restartGame();
+      UITransitions.show(document.getElementById('settingsPanel'),false);
+      document.getElementById('settingsToggle').setAttribute('aria-expanded','false');
+    };
+  }
+
+  async function safeSaveAndExit() {
+    if(!G.engine || !G.assets)return {saved:false,closed:false,reason:'not_ready'};
+    if(!saveCurrentGame())return {saved:false,closed:false,reason:'save_failed'};
+    // Freeze after a successful write; a blocked close must not keep changing
+    // the progress that the user has just saved.
+    const snapshot=document.createElement('canvas');snapshot.width=G.canvas.width;snapshot.height=G.canvas.height;
+    snapshot.getContext('2d').drawImage(G.canvas,0,0);
+    G.exitSnapshot=snapshot;G.phase='exited';G.isDragging=false;G.keys.left=G.keys.right=false;
+    if(G.dropCooldownTimer!==null)clearTimeout(G.dropCooldownTimer);
+    G.dropCooldownTimer=null;
+    EndScene.hide();closeRestartChoice();
+    UITransitions.show(document.getElementById('saveChoice'),false);
+    UITransitions.show(document.getElementById('settingsPanel'),false);
+    for(const sound of activeSounds.keys())sound.pause();activeSounds.clear();
+    if(bgm)bgm.pause();
+    try{window.close();}catch{}
+    await new Promise(resolve=>setTimeout(resolve,150));
+    if(window.closed)return {saved:true,closed:true,reason:null};
+    let notice=document.getElementById('safeExitNotice');
+    if(!notice) {
+      notice=document.createElement('div');notice.id='safeExitNotice';notice.className='safe-exit-notice';
+      notice.setAttribute('role','status');document.body.append(notice);
+    }
+    notice.textContent='已安全保存，可以关闭此页';
+    return {saved:true,closed:false,reason:'close_blocked'};
+  }
+
+  function finishGame(time) {
+    if(G.phase!=='playing') return;
+    closeRestartChoice();
+    SessionSave.clear();
+    G.phase='gameover';
+    G.canDrop=false;G.isDragging=false;G.keys.left=G.keys.right=false;
+    G.ending=EndScene.create(G.canvas,G.assets,G.score,time);
+    playSound('ending');
+  }
+
   function startGame() {
+    UITransitions.show(document.getElementById('saveChoice'),false);
+    UITransitions.show(document.getElementById('saveShade'),false);
     G.phase = 'countdown';
     G.countdownStart = performance.now();
     G.countdownEnd = G.countdownStart + CONFIG.ANIM.countdownStepDuration * 3
       + CONFIG.ANIM.countdownGoDuration;
     G.countdownCue = 0;
     playSound('countdown');
+  }
+
+  function replayWithBubbles() {
+    if(G.phase==='restarting')return;
+    SessionSave.clear();
+    const snapshot=document.createElement('canvas');snapshot.width=G.canvas.width;snapshot.height=G.canvas.height;
+    snapshot.getContext('2d').drawImage(G.canvas,0,0);
+    restartGame();
+    const start=performance.now();
+    G.replay={snapshot,start,duration:1450,bubbles:BubbleTransition.create(start,CONFIG.GAME_WIDTH,
+      CONFIG.GAME_HEIGHT,1450,CONFIG.ANIM.bubbleCount,G.assets.images.bubble)};
+    G.phase='restarting';
   }
 
   function beginPlaying() {
@@ -695,10 +821,43 @@
     G.clipAppearStart = performance.now();
     G.nextAppearStart = performance.now();
     G.canDrop = true;
+    if(G.pendingSave) {
+      const saved=G.pendingSave;G.pendingSave=null;
+      G.score=saved.score;G.totalScore=saved.totalScore||0;G.clipX=clamp(saved.clipX,CONFIG.CLIP.minX,CONFIG.CLIP.maxX);
+      G.dropLevel=saved.dropLevel;G.nextLevel=saved.nextLevel;
+      for(const data of saved.items) {
+        const body=createJellyfishBody(data.x,data.y,data.level);
+        Matter.Body.setPosition(body,{x:data.x,y:data.y});
+        Matter.Body.setAngle(body,data.angle);
+        body.positionPrev.x=body.position.x-data.vx;body.positionPrev.y=body.position.y-data.vy;
+        body.anglePrev=body.angle-data.angularVelocity;
+        body.velocity.x=data.vx;body.velocity.y=data.vy;body.angularVelocity=data.angularVelocity;
+        const item=addJellyfishItem(body,data.level);item.previousPose.angle=data.angle;
+        item.breathPhase=data.breathPhase;
+        // A saved dangerous pile must not receive a fresh spawn grace period.
+        const age=saved.overflowElapsed!==null && !data.pendingDropImpact?Math.max(data.age,1500):data.age;
+        item.spawnTime=performance.now()-age;
+        item.pendingDropImpact=!!data.pendingDropImpact;
+        Composite.add(G.engine.world,body);item.bodyInWorld=true;
+        if(data.sleeping)Sleeping.set(body,true);
+      }
+      if(saved.overflowElapsed!==null) {
+        const elapsed=Number.isFinite(saved.dangerDeadline)?Math.max(saved.overflowElapsed,CONFIG.ANIM.overflowTime-(saved.dangerDeadline-Date.now())):saved.overflowElapsed;
+        G.overflowStart=performance.now()-elapsed;
+        if(elapsed>=CONFIG.ANIM.overflowTime)finishGame(performance.now());
+      }
+    }
 
   }
 
   function restartGame() {
+    closeRestartChoice();
+    G.pendingSave=null;
+    UITransitions.show(document.getElementById('saveChoice'),false);
+    UITransitions.show(document.getElementById('saveShade'),false);
+    G.replay=null;
+    EndScene.hide();
+    G.ending=null;
     for (const sound of activeSounds.keys()) sound.pause();
     activeSounds.clear();
     if (G.dropCooldownTimer !== null) clearTimeout(G.dropCooldownTimer);
@@ -731,13 +890,26 @@
   // Rendering
   // ============================================================
   function render(timestamp) {
+    UITransitions.show(document.getElementById('exitButton'),G.phase==='playing'||G.phase==='gameover');
+    EndScene.updateGameplay(G.canvas,G.phase);
+    const mapRect=G.canvas.getBoundingClientRect(),settings=document.querySelector('.settings');
+    settings.style.right=`${window.innerWidth-mapRect.right+12}px`;
+    settings.style.bottom=`${window.innerHeight-mapRect.bottom+12}px`;
     const ctx = G.ctx;
     const W = CONFIG.GAME_WIDTH;
     const H = CONFIG.GAME_HEIGHT;
+    if(G.phase==='exited') {ctx.drawImage(G.exitSnapshot,0,0,W,H);return;}
 
     // If assets not loaded yet, just show loading
     if (!G.assets) {
       drawLoading(ctx, W, H);
+      return;
+    }
+    if(G.phase==='restarting') {
+      const t=clamp((timestamp-G.replay.start-350)/900,0,1),opacity=t*t*(3-2*t);
+      ctx.drawImage(G.replay.snapshot,0,0,W,H);
+      ctx.save();ctx.globalAlpha=opacity;OpeningScene.draw(ctx,G.assets,timestamp,opacity);ctx.restore();
+      BubbleTransition.draw(ctx,G.replay.bubbles,timestamp);
       return;
     }
 
@@ -745,10 +917,14 @@
 
     ctx.clearRect(0, 0, W, H);
 
-    if (G.phase === 'title' || G.phase === 'countdown') {
+    if (G.phase === 'title' || G.phase === 'savechoice' || G.phase === 'countdown') {
       OpeningScene.draw(ctx, G.assets, timestamp);
       if (G.phase === 'title') drawTitle(ctx, W, H);
-      else OpeningScene.drawCountdown(ctx, timestamp - G.countdownStart);
+      else if(G.phase==='countdown') OpeningScene.drawCountdown(ctx, timestamp - G.countdownStart);
+      return;
+    }
+    if (G.phase === 'gameover' && G.ending) {
+      EndScene.draw(ctx,G.assets,G.ending,timestamp,G.canvas);
       return;
     }
     if (G.phase === 'transition' && G.bubbleTransition) {
@@ -829,8 +1005,6 @@
       drawTitle(ctx, W, H);
     } else if (G.phase === 'countdown') {
       drawCountdown(ctx, W, H, timestamp);
-    } else if (G.phase === 'gameover') {
-      drawGameOver(ctx, W, H);
     }
     if (G.phase === 'transition' && G.bubbleTransition) {
       BubbleTransition.draw(ctx, G.bubbleTransition, timestamp);
@@ -1033,7 +1207,7 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `80px ${CONFIG.FONT_FAMILY}`;
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = '#BCD8FD';
     ctx.shadowColor = 'rgba(0,0,0,0.5)';
     ctx.shadowBlur = 3;
     ctx.fillText(`${G.score}`, 676, 251);
@@ -1100,10 +1274,6 @@
     ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
     ctx.fillText('点击任意位置开始游戏', W * .51, H * .43 + 32);
 
-    ctx.font = `16px ${CONFIG.FONT_FAMILY}`;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.fillText('鼠标拖动瞄准，松开投放 · ← → 移动 · Enter / ↓ 投放', W * .51, H * .43 + 80);
-
     ctx.restore();
   }
 
@@ -1127,32 +1297,6 @@
     ctx.font = `28px ${CONFIG.FONT_FAMILY}`;
     ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
     ctx.fillText('准备开始！', W / 2, H / 2 + 100);
-
-    ctx.restore();
-  }
-
-  function drawGameOver(ctx, W, H) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.fillRect(0, 0, W, H);
-
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    ctx.font = `64px ${CONFIG.FONT_FAMILY}`;
-    ctx.fillStyle = '#ff6b6b';
-    ctx.shadowColor = 'rgba(255, 0, 0, 0.4)';
-    ctx.shadowBlur = 15;
-    ctx.fillText('游戏结束', W / 2, H / 2 - 80);
-
-    ctx.shadowBlur = 0;
-    ctx.font = `40px ${CONFIG.FONT_FAMILY}`;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(`得分: ${G.score}`, W / 2, H / 2 + 10);
-
-    ctx.font = `22px ${CONFIG.FONT_FAMILY}`;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.fillText('点击任意位置重新开始', W / 2, H / 2 + 80);
 
     ctx.restore();
   }
@@ -1191,6 +1335,9 @@
     G.lastTime = timestamp;
 
     // --- Phase transitions ---
+    if(G.phase==='restarting' && timestamp-G.replay.start>=G.replay.duration) {
+      G.replay=null;startGame();
+    }
     if (G.phase === 'countdown' && timestamp < G.countdownEnd) {
       const cue = Math.min(3, Math.floor(Math.max(0, timestamp - G.countdownStart) / CONFIG.ANIM.countdownStepDuration));
       if (cue !== G.countdownCue) {
@@ -1243,6 +1390,11 @@
       G.physicsAccumulator = 0;
     }
 
+    // Persist frequently during play, including danger timing. Lifecycle events
+    // cover ordinary tab/window closure; periodic saves cover abrupt shutdown.
+    if(G.phase==='playing' && (!G.lastAutoSave || timestamp-G.lastAutoSave>=10000)) {
+      saveCurrentGame();G.lastAutoSave=timestamp;
+    }
     // --- Render ---
     render(timestamp);
 
@@ -1285,6 +1437,9 @@
     // Setup input
     setupInput();
     setupSettings();
+    EndScene.install(replayWithBubbles,requestRestart);
+    UITransitions.install();
+    setupSaveControls();
 
     // Start render loop immediately (shows loading screen)
     requestAnimationFrame(loop);
@@ -1314,6 +1469,7 @@
   }
 
   // --- Start ---
+  window.JellyfishGame=Object.freeze({safeSaveAndExit});
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

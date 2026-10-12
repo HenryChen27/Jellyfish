@@ -23,7 +23,7 @@ const ChalkUI = (() => {
     ctx.putImageData(image,0,0);return canvas;
   }
   function install() {
-    const root=document.querySelector('.settings');
+    const root=document.documentElement;
     const set=(name,canvas)=>root.style.setProperty(name,`url("${canvas.toDataURL()}")`);
     set('--chalk-panel',texture(290,300,[16,29,40],.7,'rounded',246));
     set('--chalk-track',texture(240,10,[35,54,70],.6));
