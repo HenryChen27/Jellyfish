@@ -8,3 +8,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 dist/
+
+# Local reference videos and test recordings; never ship in the game.
+*.mp4

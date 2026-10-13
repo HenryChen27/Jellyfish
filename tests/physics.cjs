@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const Matter = require('../js/matter.min.js');
 const root = path.join(__dirname, '..');
 
-function game() {
+function game(physicsOverrides={}) {
   let now = 1;
   const context = vm.createContext({
     Matter, console, performance: { now: () => now },
@@ -18,6 +18,7 @@ function game() {
     setTimeout() {},
   });
   vm.runInContext(fs.readFileSync(path.join(root, 'js/config.js'), 'utf8'), context);
+  vm.runInContext(`Object.assign(CONFIG.PHYSICS, ${JSON.stringify(physicsOverrides)})`,context);
   // Expose closure internals only in this test, and skip canvas drawing.
   const source = fs.readFileSync(path.join(root, 'js/game.js'), 'utf8')
     .replace('render(timestamp);', '')
@@ -42,9 +43,32 @@ function game() {
     for (let i = 0; i < Math.round(seconds * fps); i++) {
       now += 1000 / fps;
       api.loop(now);
+      if(api.checkBoundary)api.checkBoundary();
     }
   };
   return api;
+}
+
+{
+  function propagatedRotation(overrides) {
+    const api=game(overrides);
+    const neighbours=[api.add(1050,1345,4),api.add(1379,1316,6)];
+    const driver=api.add(1200,1333,5);
+    api.advance(5,120);
+    let rotation=0;
+    for(let i=0;i<120;i++) {
+      for(const item of [...neighbours,driver])Matter.Sleeping.set(item.body,false);
+      Matter.Body.setAngularVelocity(driver.body,.15);
+      const before=neighbours.map(item=>item.body.angle);
+      api.advance(1/120,120);
+      rotation+=neighbours.reduce((sum,item,j)=>sum+Math.abs(item.body.angle-before[j]),0);
+    }
+    return rotation;
+  }
+  const original=propagatedRotation({friction:.2,frictionStatic:.8,angularDamping:0});
+  const reduced=propagatedRotation({});
+  assert.ok(original>.01 && reduced<original*.5,`rotation transmission ${reduced} vs ${original}`);
+  console.log(`Rotation transmission: ${(100*(1-reduced/original)).toFixed(1)}% lower in driven-contact test`);
 }
 
 for (const merge of [false, true, 'floor']) {
@@ -134,6 +158,30 @@ for (let seed = 1; seed <= 12; seed++) {
   assert.ok(api.G.items.every(i => i.body.position.x >= 811 && i.body.position.x <= 1773
     && i.body.position.y <= 1414), 'fish must remain inside the bin');
   console.log('Drop sequence', seed, ': settled and stationary');
+}
+
+// Deep overlaps after a large merge must never push a body through a wall.
+for(const side of ['left','right']) {
+  const api=game();
+  const edge=side==='left'?811:1773;
+  const direction=side==='left'?1:-1;
+  for(let row=0;row<4;row++)for(let col=0;col<4;col++) {
+    api.add(edge+direction*(130+col*175),1280-row*165,8);
+  }
+  const a=api.add(edge+direction*190,1190,10);
+  const b=api.add(edge+direction*210,1170,10);
+  api.triggerMerge(a.body,b.body);
+  api.checkBoundary=()=>{
+    for(const item of api.G.items) {
+      if(!item.bodyInWorld || item.isMerging)continue;
+      const vertices=item.body.vertices;
+      assert.ok(vertices.every(v=>v.x>=810.4&&v.x<=1773.6&&v.y<=1414.6),
+        `crowded ${side} merge escaped: level ${item.level}, ${JSON.stringify(item.body.position)}`);
+    }
+  };
+  api.advance(3,120);
+  assert.ok(api.G.items.some(i=>i.level===11),'large merge completes');
+  console.log(`Crowded ${side} merge: no wall or floor escape`);
 }
 
 {

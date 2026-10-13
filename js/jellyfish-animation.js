@@ -3,7 +3,7 @@ const JellyfishAnimation = (() => {
   let renderer;
   function createRenderer() {
     const canvas = document.createElement('canvas');
-    const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false,
+    const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true,
       preserveDrawingBuffer: true, antialias: false });
     if (!gl) return null;
     function shader(type, source) {
@@ -33,6 +33,12 @@ const JellyfishAnimation = (() => {
         vec2 displacement=vec2(0.0);
         if(rosette>0.5) {
           displacement=(uv-bell.xy)*contraction*(stroke-0.3125)*bellMask;
+          // Preview only: softly lagging radial arms; glass rim stays fixed.
+          vec2 delta=uv-bell.xy;
+          float angle=atan(delta.y,delta.x);
+          float lag=sin(phase-length(delta)*4.0+angle*3.0);
+          displacement+=vec2(-delta.y,delta.x)*0.035*lag*bellMask;
+          displacement+=delta*0.018*sin(phase*2.0-length(delta)*8.0)*bellMask;
         } else {
           float base=bell.y+bell.w;
           displacement.x=(uv.x-bell.x)*contraction*stroke*bellMask;
@@ -49,9 +55,9 @@ const JellyfishAnimation = (() => {
         }
         vec2 source=clamp(uv+displacement*rim,0.0,1.0);
         vec4 moved=texture2D(sprite,source);
-        float amount=rim*smoothstep(0.01,0.12,moved.a)*smoothstep(0.01,0.12,original.a);
-        // Alpha always comes from the original: no change to size or silhouette.
-        gl_FragColor=vec4(mix(original.rgb,moved.rgb,amount),original.a);
+        // Move color and transparency together inside; keep the outer rim fixed.
+        // Both samples are premultiplied, so transparent RGB cannot leak as dirt.
+        gl_FragColor=mix(original,moved,rim);
       }`));
     gl.linkProgram(program);
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
@@ -67,6 +73,7 @@ const JellyfishAnimation = (() => {
     return { canvas, gl, uniforms, textures:new Map() };
   }
   function draw(ctx,item,profile,time=performance.now()) {
+    if(item.level===1 || item.level===2) { ctx.drawImage(item.sprite,-item.w/2,-item.h/2,item.w,item.h); return; }
     if(renderer===undefined) renderer=createRenderer();
     if(!renderer) {
       ctx.drawImage(item.sprite,-item.w/2,-item.h/2,item.w,item.h);
@@ -84,6 +91,7 @@ const JellyfishAnimation = (() => {
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);
       gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,item.sprite);
       textures.set(item.sprite,texture);
     } else gl.bindTexture(gl.TEXTURE_2D,texture);

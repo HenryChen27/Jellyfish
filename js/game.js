@@ -111,7 +111,10 @@
         if (body.isStatic || body.isSleeping) continue;
         body.velocity.x = body.position.x - body.positionPrev.x;
         body.velocity.y = body.position.y - body.positionPrev.y;
-        body.angularVelocity = body.angle - body.anglePrev;
+        const angularRetention=Math.pow(1-CONFIG.PHYSICS.angularDamping,CONFIG.PHYSICS.fixedDelta/(1000/60));
+        const angularDelta=(body.angle-body.anglePrev)*angularRetention;
+        body.anglePrev=body.angle-angularDelta;
+        body.angularVelocity = angularDelta;
         const speedScale = (1000 / 60) / CONFIG.PHYSICS.fixedDelta;
         body.speed = Math.hypot(body.velocity.x, body.velocity.y) * speedScale;
         body.angularSpeed = Math.abs(body.angularVelocity) * speedScale;
@@ -231,6 +234,34 @@
 
   function getItemByBody(body) {
     return G.items.find(it => it.body === body);
+  }
+
+  function enforceContainerBoundary() {
+    const C=CONFIG.CONTAINER;
+    // Normal collision slop is harmless. Only correct an actual wall escape,
+    // using rotated vertices rather than velocity-expanded Matter bounds.
+    const tolerance=.5;
+    for(const item of G.items) {
+      if(!item.bodyInWorld || item.isMerging)continue;
+      const body=item.body;
+      if(body.bounds.min.x>=C.left-tolerance && body.bounds.max.x<=C.right+tolerance
+        && body.bounds.max.y<=C.bottom+tolerance)continue;
+      let left=Infinity,right=-Infinity,bottom=-Infinity;
+      for(const vertex of body.vertices) {
+        left=Math.min(left,vertex.x);right=Math.max(right,vertex.x);bottom=Math.max(bottom,vertex.y);
+      }
+      const dx=left<C.left-tolerance?C.left-left:right>C.right+tolerance?C.right-right:0;
+      const dy=bottom>C.bottom+tolerance?C.bottom-bottom:0;
+      if(!dx&&!dy)continue;
+      const vx=body.position.x-body.positionPrev.x,vy=body.position.y-body.positionPrev.y;
+      Matter.Body.translate(body,{x:dx,y:dy});
+      // Remove only velocity into the wall, preserving movement along it.
+      if(dx && vx*dx<0){body.positionPrev.x=body.position.x;body.velocity.x=0;}
+      if(dy && vy>0){body.positionPrev.y=body.position.y;body.velocity.y=0;}
+      if(dx)body.positionImpulse.x=0;
+      if(dy)body.positionImpulse.y=0;
+      item.previousPose={x:body.position.x,y:body.position.y,angle:body.angle};
+    }
   }
 
   // ============================================================
@@ -1354,6 +1385,7 @@
         }
         Engine.update(G.engine, step);
         updateMergeAnimations(step);
+        enforceContainerBoundary();
         G.physicsAccumulator -= step;
       }
 

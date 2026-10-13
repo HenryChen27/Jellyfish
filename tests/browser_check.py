@@ -122,8 +122,8 @@ with sync_playwright() as playwright:
       }
       return results;
     }''')
-    assert all(r['changed'] > 0 and r['rimChanged'] == 0 for r in results), results
-    print('Keyboard: left/right move; Enter/down drop. All 11 textures animate with unchanged outer pixels.')
+    assert all((r['changed']==0 if r['level']<=2 else r['changed']>0) and r['rimChanged']==0 for r in results), results
+    print('Keyboard: left/right move; Enter/down drop. Levels 1–2 stay static; 3–11 animate with unchanged outer pixels.')
     page.evaluate('''() => {
       const api = physicsCheck;
       const layout = [[880,1340,4,0],[915,1190,3,0],[1045,1310,6,0],
