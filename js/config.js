@@ -35,7 +35,7 @@ const CONFIG = {
     wallThickness: 40,
     restitution: 0.08,
     friction: 0.035,
-    frictionStatic: 0.1,
+    frictionStatic: 0.8,
     angularDamping: 0.16, // rotational drag per 60Hz frame, independent of translation
     frictionAir: 0.02,
     density: 0.0012,
