@@ -695,7 +695,7 @@
           else dropJellyfish();
         }
       }
-      if ((e.key === 'c' || e.key === 'C') && G.phase === 'playing') {
+      if (CONFIG.DEBUG.randomSpawnEnabled && (e.key === 'c' || e.key === 'C') && G.phase === 'playing') {
         spawnRandomJellyfish(10);
       }
     });

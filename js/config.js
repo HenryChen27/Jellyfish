@@ -69,6 +69,7 @@ const CONFIG = {
 
   // Drop level range (random pick from 1..DROP_MAX_LEVEL)
   DROP_MAX_LEVEL: 5,
+  DEBUG: { randomSpawnEnabled: false }, // Enable explicitly when debugging.
 
   // 11 levels of jellyfish
   JELLYFISH: [
