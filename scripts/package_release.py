@@ -13,6 +13,7 @@ output=root/'dist'/f'desktop-v{args.version}'
 output.mkdir(parents=True,exist_ok=True)
 files=[root/'index.html']
 files.extend(sorted((root/'js').glob('*.js')))
+files.extend(sorted((root/'js').glob('*LICENSE*.txt')))
 files.extend(sorted((root/'css').glob('*.css')))
 files.extend(sorted(p for p in (root/'assets').rglob('*') if p.is_file()
     and p.suffix.lower() in {'.png','.mp3','.wav','.ttf','.txt','.md'} and p.name!='1.png'))

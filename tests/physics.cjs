@@ -6,10 +6,10 @@ const vm = require('node:vm');
 const Matter = require('../js/matter.min.js');
 const root = path.join(__dirname, '..');
 
-function game(physicsOverrides={},settlingEnabled=true) {
+function game(physicsOverrides={},mergeEnabled=true) {
   let now = 1;
   const context = vm.createContext({
-    Matter, console, performance: { now: () => now },
+    planck: require('../js/planck.min.js'), Matter, console, performance: { now: () => now },
     window: {},
     SessionSave: { write: () => true, clear() {} },
     queueMicrotask: fn => fn(),
@@ -19,10 +19,12 @@ function game(physicsOverrides={},settlingEnabled=true) {
   });
   vm.runInContext(fs.readFileSync(path.join(root, 'js/config.js'), 'utf8'), context);
   vm.runInContext(`Object.assign(CONFIG.PHYSICS, ${JSON.stringify(physicsOverrides)})`,context);
+  vm.runInContext(fs.readFileSync(path.join(root,'js/native-physics.js'),'utf8'),context);
   // Expose closure internals only in this test, and skip canvas drawing.
   const source = fs.readFileSync(path.join(root, 'js/game.js'), 'utf8')
     .replace('render(timestamp);', '')
-    .replace('settleSupportedPiles(step);',settlingEnabled?'settleSupportedPiles(step);':'')
+    .replace('    triggerMerge(ba, bb);',mergeEnabled?'    triggerMerge(ba, bb);':'')
+    .replace('      checkGameOver();',mergeEnabled?'      checkGameOver();':'')
     .replace('  // --- Start ---', `
       globalThis.testGame = { G, initPhysics, setupCollisionHandler,
         createJellyfishBody, addJellyfishItem, triggerMerge, dropJellyfish, spawnRandomJellyfish, loop, drawJellyfish };
@@ -80,6 +82,32 @@ function game(physicsOverrides={},settlingEnabled=true) {
  api.advance(5,120);
  assert.deepEqual(api.G.items.map(i=>JSON.stringify([i.body.position,i.body.angle])),poses,'C-key pile must stop moving');
  console.log('C-key repeated spawning: settles and stays still');
+}
+
+// Isolate contact stability with 60 bodies, so merges cannot hide the
+// number of contacts. Overflow scoring is excluded only in this physics test.
+for(const backend of ['matter','planck']) {
+ const api=game({backend},false);
+ for(let row=0;row<6;row++)for(let col=0;col<10;col++) {
+   const item=api.add(860+col*94,1280-row*120,1+(col+row*3)%5);
+   Matter.Body.setAngle(item.body,(col%3-.5)*.3);
+ }
+ api.advance(40,120);
+ const before=api.G.items.map(i=>({x:i.body.position.x,y:i.body.position.y,angle:i.body.angle}));
+ api.advance(10,120);
+ const drift=Math.max(...api.G.items.map((item,i)=>Math.hypot(item.body.position.x-before[i].x,item.body.position.y-before[i].y)));
+ const turn=Math.max(...api.G.items.map((item,i)=>Math.abs(item.body.angle-before[i].angle)));
+ console.log(`60-body ${backend}: awake=${api.G.items.filter(i=>!i.body.isSleeping).length}, drift=${drift.toFixed(4)}px, turn=${turn.toFixed(4)}rad`);
+ if(backend==='planck') {
+   assert.equal(drift,0,'native dense pile must stay still');assert.equal(turn,0);
+   const driver=api.G.items.find(i=>i.level===5);Matter.Sleeping.set(driver.body,false);Matter.Body.setAngularVelocity(driver.body,.12);
+   let settled=0;
+   do {api.advance(.25,120);settled+=.25;} while(settled<10 && api.G.items.some(i=>!i.body.isSleeping));
+   assert.ok(api.G.items.every(i=>i.body.isSleeping),'spin impulse must settle within ten seconds');
+   console.log('60-body spin impulse settled after',settled,'seconds');
+   const poses=api.G.items.map(i=>JSON.stringify([i.body.position,i.body.angle]));api.advance(5,120);
+   assert.deepEqual(api.G.items.map(i=>JSON.stringify([i.body.position,i.body.angle])),poses,'dense pile must settle after spin impulse');
+ }
 }
 
 for (const merge of [false, true, 'floor']) {

@@ -26,6 +26,8 @@ const CONFIG = {
 
   // Physics
   PHYSICS: {
+    backend: 'planck',
+    nativeGravity: 20,
     fixedDelta: 1000 / 120,
     maxSubSteps: 6,
     sleepThreshold: 120,

@@ -28,13 +28,17 @@ with sync_playwright() as p:
     assert page.evaluate("typeof JellyfishGame.save==='function' && JellyfishGame.save()===true")
     assert page.locator('#exitButton').count()==0
     page.locator('#gameCanvas').click();page.wait_for_function("packageCheck.G.phase==='playing'",timeout=15000)
-    original_id=page.evaluate('packageCheck.G.nextId')
-    page.keyboard.press('c');page.keyboard.press('Shift+C')
-    assert page.evaluate('packageCheck.G.nextId')==original_id
-    page.evaluate('CONFIG.DEBUG.randomSpawnEnabled=true')
-    page.keyboard.press('c')
-    assert page.evaluate('packageCheck.G.nextId')==original_id+10
-    page.evaluate('CONFIG.DEBUG.randomSpawnEnabled=false')
+    page.evaluate("""() => {
+      const original=CONFIG.DEBUG.randomSpawnEnabled;
+      CONFIG.DEBUG.randomSpawnEnabled=false;
+      const id=packageCheck.G.nextId;
+      for(const key of ['c','C'])document.body.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true}));
+      if(packageCheck.G.nextId!==id)throw new Error('Disabled shortcut generated fish');
+      CONFIG.DEBUG.randomSpawnEnabled=true;
+      document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'c',bubbles:true}));
+      if(packageCheck.G.nextId!==id+10)throw new Error('Enabled shortcut did not generate ten fish');
+      CONFIG.DEBUG.randomSpawnEnabled=original;
+    }""")
     assert not errors and not missing,(errors,missing)
     browser.close()
 server.shutdown()

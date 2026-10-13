@@ -139,6 +139,7 @@
 
     G.walls = [left, right, bottom];
     Composite.add(G.engine.world, G.walls);
+    G.nativePhysics=CONFIG.PHYSICS.backend==='planck'?NativePhysics.create(G.engine):null;
   }
 
   // ============================================================
@@ -237,7 +238,7 @@
     const C=CONFIG.CONTAINER;
     // Normal collision slop is harmless. Only correct an actual wall escape,
     // using rotated vertices rather than velocity-expanded Matter bounds.
-    const tolerance=.5;
+    const tolerance=G.nativePhysics?2:.5;
     for(const item of G.items) {
       if(!item.bodyInWorld || item.isMerging)continue;
       const body=item.body;
@@ -1380,7 +1381,7 @@
           item.previousPose.y = item.body.position.y;
           item.previousPose.angle = item.body.angle;
         }
-        Engine.update(G.engine, step);
+        if(G.nativePhysics)G.nativePhysics.step(step);else Engine.update(G.engine, step);
         updateMergeAnimations(step);
         enforceContainerBoundary();
         G.physicsAccumulator -= step;
