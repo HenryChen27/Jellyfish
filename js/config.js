@@ -49,7 +49,7 @@ const CONFIG = {
       { period: 2900, bell: [.50,.32,.23,.23], contraction: 0.0585, strands: [.28,.36,.72,.81], sway: 0.0338 },
       { period: 3000, bell: [.50,.40,.33,.28], contraction: 0.1885, strands: [.30,.59,.74,.83], sway: 0.0429 },
       { period: 3100, bell: [.51,.47,.32,.29], contraction: 0.1365, strands: [.33,.66,.74,.85], sway: 0.0312 },
-      { period: 3000, mode: 'rosette', bell: [.50,.51,.34,.34], contraction: 0.104, sway: 0 },
+      { period: 3000, mode: 'rosette', bell: [.50,.51,.34,.34], contraction: 0.18, sway: 0 },
       { period: 2950, bell: [.50,.37,.37,.25], contraction: 0.1495, strands: [.27,.49,.78,.83], sway: 0.0494 },
       { period: 3050, bell: [.50,.41,.41,.32], contraction: 0.169, strands: [.16,.66,.84,.89], sway: 0.0429 },
       { period: 3100, bell: [.50,.34,.40,.21], contraction: 0.1235, strands: [.24,.47,.79,.85], sway: 0.0338 },
