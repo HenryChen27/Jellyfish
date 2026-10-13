@@ -111,10 +111,7 @@
         if (body.isStatic || body.isSleeping) continue;
         body.velocity.x = body.position.x - body.positionPrev.x;
         body.velocity.y = body.position.y - body.positionPrev.y;
-        const angularRetention=Math.pow(1-CONFIG.PHYSICS.angularDamping,CONFIG.PHYSICS.fixedDelta/(1000/60));
-        const angularDelta=(body.angle-body.anglePrev)*angularRetention;
-        body.anglePrev=body.angle-angularDelta;
-        body.angularVelocity = angularDelta;
+        body.angularVelocity = body.angle - body.anglePrev;
         const speedScale = (1000 / 60) / CONFIG.PHYSICS.fixedDelta;
         body.speed = Math.hypot(body.velocity.x, body.velocity.y) * speedScale;
         body.angularSpeed = Math.abs(body.angularVelocity) * speedScale;
