@@ -60,6 +60,7 @@
 
     // Game over
     overflowStart: null,
+    overflowCue: null,
     ending: null,
 
     // Timing
@@ -521,12 +522,20 @@
     if (overflowing) {
       if (G.overflowStart === null) {
         G.overflowStart = now;
+        G.overflowCue = null;
         saveCurrentGame();
       } else if (now - G.overflowStart >= CONFIG.ANIM.overflowTime) {
         finishGame(now);
+        return;
+      }
+      const remaining = Math.ceil((CONFIG.ANIM.overflowTime - (now - G.overflowStart)) / 1000);
+      if (remaining > 0 && remaining !== G.overflowCue) {
+        G.overflowCue = remaining;
+        playSound('countdown');
       }
     } else {
       G.overflowStart = null;
+      G.overflowCue = null;
     }
   }
 
